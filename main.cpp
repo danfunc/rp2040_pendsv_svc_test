@@ -10,7 +10,7 @@ const uint LED_PIN = PICO_DEFAULT_LED_PIN;
 void svc_handler(void);
 static bool is_led_on = false;
 void svc_handler(void) {
-  printf("svc_handle_success≠\n");
+  printf("svc_handle_success\n");
   if (is_led_on == false) {
     gpio_put(LED_PIN, 1);
     is_led_on = true;
@@ -33,7 +33,7 @@ enum struct exc_return : uint32_t {
 struct exception_stack {
   uint32_t r0, r1, r2, r3, r12;
   void (*lr)(), (*pc)();
-  uintptr_t xPSR = (1 << 24);
+  uintptr_t xPSR;
 };
 using exec_mode = exc_return;
 
