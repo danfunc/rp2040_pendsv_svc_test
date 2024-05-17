@@ -1,28 +1,11 @@
 #include <cinttypes>
 #include <exception>
 #include <hardware/exception.h>
+#include <memory>
 #include <pico/stdio.h>
 #include <pico/stdlib.h>
 #include <stdio.h>
 #include <stdlib.h>
-#define PICO_DEFAULT_LED_PI 25
-const uint LED_PIN = PICO_DEFAULT_LED_PIN;
-void svc_handler(void);
-static bool is_led_on = false;
-void svc_handler(void) {
-  printf("svc_handle_success\n");
-  if (is_led_on == false) {
-    gpio_put(LED_PIN, 1);
-    is_led_on = true;
-    return;
-  } else {
-    gpio_put(LED_PIN, 0);
-    is_led_on = false;
-    return;
-  }
-  return;
-}
-
 using method = void (*)(uintptr_t, uintptr_t, uintptr_t, uintptr_t);
 
 enum struct exc_return : uint32_t {
@@ -85,28 +68,56 @@ struct context {
   };
 };
 
-void pendsv_handler() {
+class cpu_manager;
+extern "C" {
+int main(int argc, const char *argv[]);
+}
+class rp2040 {
+  friend cpu_manager;
+  friend int main(int, const char *[]);
+  static std::shared_ptr<context> current_contexts[2];
+  static cpu_manager *cpu_managers[2];
+  static void pendsv_handler();
+  rp2040(cpu_manager &manager, size_t core_num);
+};
 
-  exception_stack *stack;
-  asm volatile("mrs %0, PSP" : "=r"(stack));
-  stack->pc = target;
-  stack->lr = trap;
-  stack->xPSR = (1 << 24);
+class cpu_manager {
+  friend rp2040;
+  friend int main(int, const char **);
+  std::shared_ptr<context> pop_next_context();
+  rp2040 driver;
+  cpu_manager(size_t core_num) : driver{*this, core_num} {};
+};
+
+cpu_manager *rp2040::cpu_managers[2] = {nullptr, nullptr};
+std::shared_ptr<context> rp2040::current_contexts[2] = {{}, {}};
+
+rp2040::rp2040(cpu_manager &manager, size_t core_num) {
+  cpu_managers[core_num] = &manager;
+}
+
+std::shared_ptr<context> cpu_manager::pop_next_context() {
+  return std::make_shared<context>((method)target, 0, 0, 0, 0);
+}
+
+void rp2040::pendsv_handler() {
+  int core_num = get_core_num();
+  if (current_contexts[core_num]) {
+  }
+  current_contexts[core_num] = cpu_managers[core_num]->pop_next_context();
+  void *sp = current_contexts[core_num]->sp;
+  asm volatile("msr PSP,%0" ::"r"(sp));
   exc_return return_code = exc_return::thread_PSP;
   asm volatile("bx %0" ::"r"(return_code));
 }
 int main(int argc, char const *argv[]) {
   stdio_init_all();
+  cpu_manager manager{0};
   // asm volatile("msr CONTROL, %0" ::"r"(SP_SEL_VAL));
   void *sp = (void *)(((uintptr_t)malloc(1024) + 1024) & ~0xfL);
   static context target_context{(method)target, 0, 0, 0, 0};
   asm volatile("msr PSP, %0" ::"r"(sp));
-  exception_set_exclusive_handler(PENDSV_EXCEPTION, []() {
-    void *sp = target_context.sp;
-    asm volatile("msr PSP,%0" ::"r"(sp));
-    exc_return return_code = exc_return::thread_PSP;
-    asm volatile("bx %0" ::"r"(return_code));
-  });
+  exception_set_exclusive_handler(PENDSV_EXCEPTION, rp2040::pendsv_handler);
   while (1) {
     *(uintptr_t *)(PPB_BASE + M0PLUS_ICSR_OFFSET) |= 1 << 28;
     sleep_ms(1000);
