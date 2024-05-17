@@ -1,11 +1,12 @@
 cmake_minimum_required(VERSION 3.20)
 set(PICO_SDK_FETCH_FROM_GIT on)
 set(PICO_CXX_ENABLE_EXCEPTIONS on)
+add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-std=c++23>)
 if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/pico_sdk_import.cmake)
 file(DOWNLOAD https://raw.githubusercontent.com/raspberrypi/pico-sdk/master/external/pico_sdk_import.cmake pico_sdk_import.cmake)
 endif()
 include(${CMAKE_CURRENT_BINARY_DIR}/pico_sdk_import.cmake)
-
+add_compile_options(-Wall -Wextra)
 project(rp2040_pendsv_svc_test C CXX ASM)
 pico_sdk_init()
 add_executable(main main.cpp)

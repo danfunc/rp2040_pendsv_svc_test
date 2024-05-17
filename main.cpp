@@ -58,14 +58,14 @@ void trap() {
 int main(int argc, char const *argv[]);
 
 struct context {
-  exception_stack return_stack;
   uint32_t r4 = 0, r5 = 0, r6 = 0, r7 = 0, r8 = 0, r9 = 0, r10 = 0, r11 = 0;
   void const *stack_start;
   void *sp;
   exec_mode mode = exec_mode::thread_MSP;
   context(method method, size_t arg0, size_t arg1, size_t arg2, size_t arg3,
           size_t stack_size = 1024)
-      : stack_start{malloc(stack_size)} {
+      : stack_start{malloc(stack_size + sizeof(exception_stack))} {
+    exception_stack return_stack;
     return_stack.pc = (void (*)())method;
     return_stack.r0 = arg0;
     return_stack.r1 = arg1;
@@ -73,9 +73,10 @@ struct context {
     return_stack.r3 = arg3;
     return_stack.lr = trap;
     return_stack.xPSR = (1 << 24);
-    if (stack_start != nullptr)
-      sp = (void *)(((uintptr_t)stack_start + stack_size - 1) & ~0xfL);
-    else
+    if (stack_start != nullptr) {
+      sp = (void *)(((uintptr_t)stack_start + stack_size) & ~0xfL);
+      *(exception_stack *)sp = return_stack;
+    } else
       ;
   };
   ~context() {
@@ -103,9 +104,6 @@ int main(int argc, char const *argv[]) {
   exception_set_exclusive_handler(PENDSV_EXCEPTION, []() {
     void *sp = target_context.sp;
     asm volatile("msr PSP,%0" ::"r"(sp));
-    exception_stack *stack;
-    asm volatile("mrs %0, PSP" : "=r"(stack));
-    *stack = target_context.return_stack;
     exc_return return_code = exc_return::thread_PSP;
     asm volatile("bx %0" ::"r"(return_code));
   });
