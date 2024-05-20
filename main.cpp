@@ -20,12 +20,6 @@ struct exception_stack {
 };
 using exec_mode = exc_return;
 
-inline void *get_sp() {
-  void *rp;
-  asm("mov %0 sp" : "=r"(rp));
-  return rp;
-}
-
 void target() {
   for (size_t i = 0; i < 5; i++) {
     printf("success\n");
@@ -62,6 +56,7 @@ struct context {
     } else
       ;
   };
+  context() : stack_start{nullptr} {};
   ~context() {
     if (stack_start != nullptr)
       free((void *)stack_start);
@@ -69,9 +64,9 @@ struct context {
 };
 
 class cpu_manager;
-extern "C" {
+
 int main(int argc, const char *argv[]);
-}
+
 class rp2040 {
   friend cpu_manager;
   friend int main(int, const char *[]);
@@ -90,7 +85,8 @@ class cpu_manager {
 };
 
 cpu_manager *rp2040::cpu_managers[2] = {nullptr, nullptr};
-std::shared_ptr<context> rp2040::current_contexts[2] = {{}, {}};
+std::shared_ptr<context> rp2040::current_contexts[2] = {
+    {std::make_shared<context>()}, {std::make_shared<context>()}};
 
 rp2040::rp2040(cpu_manager &manager, size_t core_num) {
   cpu_managers[core_num] = &manager;
@@ -114,9 +110,6 @@ int main(int argc, char const *argv[]) {
   stdio_init_all();
   cpu_manager manager{0};
   // asm volatile("msr CONTROL, %0" ::"r"(SP_SEL_VAL));
-  void *sp = (void *)(((uintptr_t)malloc(1024) + 1024) & ~0xfL);
-  static context target_context{(method)target, 0, 0, 0, 0};
-  asm volatile("msr PSP, %0" ::"r"(sp));
   exception_set_exclusive_handler(PENDSV_EXCEPTION, rp2040::pendsv_handler);
   while (1) {
     *(uintptr_t *)(PPB_BASE + M0PLUS_ICSR_OFFSET) |= 1 << 28;
