@@ -5,7 +5,7 @@
 .global pendsv_handler
 .type   pendsv_handler, %function
 pendsv_handler:
-bl get_current_context;
+bl get_current_context
 str r4, [r0,#0]
 str r5, [r0,#4]
 str r6, [r0,#8]
@@ -20,7 +20,7 @@ mov r1, r11
 str r1, [r0,#28]
 mrs r1, PSP
 str r1, [r0,#32]
-bl pop_next_context;
+bl pop_next_context
 ldr r4, [r0,#0]
 ldr r5, [r0,#4]
 ldr r6, [r0,#8]
@@ -38,3 +38,5 @@ msr PSP, r1
 mov r0, #2
 neg r0,r0
 bx r0
+bl save_from_r4_to_r11
+bl load_from_r4_to_r11

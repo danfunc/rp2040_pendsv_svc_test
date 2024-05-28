@@ -20,8 +20,8 @@ struct exception_stack {
 };
 using exec_mode = exc_return;
 
-void target() {
-  for (size_t i = 0; i < 5; i++) {
+void target(size_t count) {
+  for (size_t i = 0; i < count; i++) {
     printf("success\n");
     sleep_ms(1000);
   }
@@ -29,6 +29,7 @@ void target() {
 void trap() {
   while (1) {
     printf("trapped\n");
+    *(uintptr_t *)(PPB_BASE + M0PLUS_ICSR_OFFSET) |= 1 << 28;
     sleep_ms(1000);
   }
 }
@@ -133,22 +134,15 @@ context *save_from_r4_to_r11(context *t) {
 };
 
 context *load_from_r4_to_r11(context *t) {
-  uint32_t r4, r5, r6, r7, r8, r9, r10, r11, r12;
-  t->r4 = r4;
+  uint32_t r4 = t->r4, r5 = t->r5, r6 = t->r6, r7 = t->r7, r8 = t->r8,
+           r9 = t->r9, r10 = t->r10, r11 = t->r11;
   asm volatile("mov r4, %0" ::"r"(r4));
-  t->r5 = r5;
   asm volatile("mov r5, %0" ::"r"(r5));
-  t->r6 = r6;
   asm volatile("mov r6, %0" ::"r"(r6));
-  t->r7 = r7;
   asm volatile("mov r7, %0" ::"r"(r7));
-  t->r8 = r8;
   asm volatile("mov r8, %0 " ::"r"(r8));
-  t->r9 = r9;
   asm volatile("mov r9, %0 " ::"r"(r9));
-  t->r10 = r10;
   asm volatile("mov r10, %0" ::"r"(r10));
-  t->r11 = r11;
   asm volatile("mov r11, %0" ::"r"(r11));
   return t;
 };
@@ -204,7 +198,7 @@ context *rp2040::pop_next_context() {
 context *cpu_manager::get_current_context() { return current_context.get(); }
 
 context *cpu_manager::pop_next_context() {
-  current_context = default_context;
+  current_context = std::make_shared<context>((method)target, 10, 0, 0, 0);
   return current_context.get();
 }
 
